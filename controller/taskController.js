@@ -105,7 +105,7 @@ exports.deleteTaskByID = async (req, res) => {
         }
 
         await task.destroy();
-        return res.status(204).send();
+        return res.status(201).json({message:"Task deleted successfully"});
     } catch (error) {
         console.error('Error deleting task:', error);
         return res.status(500).json({ error: error.message });
