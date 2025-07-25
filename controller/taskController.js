@@ -1,90 +1,113 @@
-const tasks = require('../models/taskModel');
+const Task = require('../models/taskModel');
 const { v4: uuidv4 } = require('uuid');
 
 // Create a new task
-exports.createTask = (req, res) => {
+exports.createTask = async (req, res) => {
+    try {
+        if (!req.body)
+            res.status(400).json({ message: "Invalid format of data for task creation" });
 
-    if (!req.body)
-        res.status(400).json({ message: "Invalid format of data for task creation" });
+        const reqTasks = req.body;
 
-    const reqTasks = req.body;
-
-    reqTasks.forEach(element => {
-        const newTask = {
-            id: uuidv4(),
-            title: element.title,
-            description: element.description,
-            status: element.status || "PENDING",
-            createdAt: new Date(),
-            updatedAt: new Date()
+        if (!Array.isArray(reqTasks) || reqTasks.length === 0) {
+            return res.status(400).json({ message: 'Invalid format of data for task creation. Expecting an array of tasks.' });
         }
-        tasks.push(newTask);
-    });
 
-    res.status(201).json(tasks);
-}
+        // Validate and create each task
+        const createdTasks = await Promise.all(reqTasks.map(async (task) => {
+            return await Task.create({
+                title: task.title,
+                description: task.description,
+                status: task.status || 'PENDING'
+            });
+        }));
+
+        res.status(201).json({
+            length: createdTasks.length,
+            tasks: createdTasks
+        });
+    } catch (error) {
+        console.error('Create Task Error:', error);
+        res.status(500).json({ message: 'Internal server error', error: error.message });
+    }
+};
 
 // Get all tasks
-exports.getAllTasks = (req, res) => {
-    res.json({ length: tasks.length, tasks: tasks });
+exports.getAllTasks = async (req, res) => {
+    try {
+        const tasks = await Task.findAll();
+        return res.status(200).json({
+            length: tasks.length,
+            tasks: tasks
+        });
+    } catch (error) {
+        console.error('Error retrieving tasks:', error);
+        return res.status(500).json({ error: error.message });
+    }
 };
 
 // Get task by ID
-exports.getTaskByID = (req, res) => {
-
-    const targetID = req.params.id;
-    const targetTask = tasks.find((t) => t.id === targetID);
-
-    if (!targetTask)
-        res.status(404).json({ message: "No task found" });
-    else
-        res.status(201).json(targetTask);
-}
-
-// Update task by ID
-exports.updateTaskByID = (req, res) => {
+exports.getTaskByID = async (req, res) => {
     try {
-        if (!req.body)
-            return res.status(400).json({ message: "Invalid format of data for task updation" });
+        const { id } = req.params;
+        const task = await Task.findByPk(id);
 
-        const { title, description, status } = req.body;
-
-        const allowedStatuses = ["PENDING", "IN_PROGRESS", "COMPLETED"];
-        if (status && !allowedStatuses.includes(status)) {
-            return res.status(400).json({
-                message: `Invalid status value. Allowed values are: ${allowedStatuses.join(" | ")}`
-            });
+        if (!task) {
+            return res.status(404).json({ message: 'Task not found' });
         }
 
-        const targetID = req.params.id;
-        const targetTask = tasks.find((t) => t.id === targetID);
-        if (!targetTask) {
-            return res.status(404).json({ message: "No task found" }); // add return
-        }
-
-
-        targetTask.title = title || targetTask.title;
-        targetTask.description = description || targetTask.description;
-        targetTask.status = status || targetTask.status;
-        targetTask.updatedAt = new Date();
-
-        return res.status(200).json(targetTask); // use 200 for update
+        return res.status(200).json(task);
     } catch (error) {
-        console.error("Error updating task:", error); // log for debugging
-        return res.status(500).json({ error: error.message || "Internal Server Error" });
+        console.error('Error getting task:', error);
+        return res.status(500).json({ error: error.message });
     }
 };
 
-exports.deleteTaskByID = (req, res) => {
-    const targetID = req.params.id;
-    const targetTaskIndex = tasks.findIndex((t) => t.id === targetID);
+// Update task by ID
+exports.updateTaskByID = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!req.body)
+            return res.status(401).json({ error: "Invalid request for task updation" });
 
-    console.log(targetTaskIndex);
+        const { title, description, status } = req.body;
 
-    if (targetTaskIndex === -1)
-        res.status(404).json({ message: "No task found" });
-    else {
-        tasks.splice(targetTaskIndex, 1);
-        res.status(201).json({ message: "Task deleted" });
+        const task = await Task.findByPk(id);
+        if (!task) {
+            return res.status(404).json({ message: 'No task found' });
+        }
+
+        const allowedStatuses = ['PENDING', 'IN_PROGRESS', 'COMPLETED'];
+        if (status && !allowedStatuses.includes(status)) {
+            return res.status(400).json({ message: `Invalid status. Use one of: ${allowedStatuses.join(" | ")}` });
+        }
+
+        // Update fields if provided
+        if (title) task.title = title;
+        if (description) task.description = description;
+        if (status) task.status = status;
+
+        await task.save();
+        return res.status(200).json(task);
+    } catch (error) {
+        console.error('Error updating task:', error);
+        return res.status(500).json({ error: error.message });
     }
-}
+};
+
+exports.deleteTaskByID = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const task = await Task.findByPk(id);
+
+        if (!task) {
+            return res.status(404).json({ message: 'Task not found' });
+        }
+
+        await task.destroy();
+        return res.status(204).send();
+    } catch (error) {
+        console.error('Error deleting task:', error);
+        return res.status(500).json({ error: error.message });
+    }
+};
