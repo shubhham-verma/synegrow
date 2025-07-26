@@ -2,6 +2,7 @@ const Task = require('../models/taskModel');
 const { v4: uuidv4 } = require('uuid');
 const { Op } = require("sequelize");
 
+
 // Create a new task
 exports.createTask = async (req, res) => {
     try {
