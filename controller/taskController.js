@@ -35,10 +35,21 @@ exports.createTask = async (req, res) => {
 // Get all tasks
 exports.getAllTasks = async (req, res) => {
     try {
-        const tasks = await Task.findAll();
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const offset = (page - 1) * limit;
+
+        const { count, rows } = await Task.findAndCountAll({
+            limit: limit,
+            offset: offset,
+            order: [['createdAt', 'DESC']]
+        });
+
         return res.status(200).json({
-            length: tasks.length,
-            tasks: tasks
+            totalItems: count,
+            totalPages: Math.ceil(count / limit),
+            currentPage: page,
+            tasks: rows
         });
     } catch (error) {
         console.error('Error retrieving tasks:', error);
@@ -105,7 +116,7 @@ exports.deleteTaskByID = async (req, res) => {
         }
 
         await task.destroy();
-        return res.status(201).json({message:"Task deleted successfully"});
+        return res.status(201).json({ message: "Task deleted successfully" });
     } catch (error) {
         console.error('Error deleting task:', error);
         return res.status(500).json({ error: error.message });
