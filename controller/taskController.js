@@ -1,5 +1,6 @@
 const Task = require('../models/taskModel');
 const { v4: uuidv4 } = require('uuid');
+const { Op } = require("sequelize");
 
 // Create a new task
 exports.createTask = async (req, res) => {
@@ -57,6 +58,41 @@ exports.getAllTasks = async (req, res) => {
     }
 };
 
+// Search tasks by status and title
+exports.searchTasks = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const offset = (page - 1) * limit;
+
+        const { status, title } = req.query;
+
+        const whereClause = {};
+        if (status) {
+            whereClause.status = status;
+        }
+        if (title) {
+            whereClause.title = { [Op.like]: `%${title}%` };
+        }
+
+        const { count, rows } = await Task.findAndCountAll({
+            where: whereClause,
+            limit,
+            offset,
+            order: [["createdAt", "DESC"]],
+        });
+
+        res.status(200).json({
+            totalItems: count,
+            totalPages: Math.ceil(count / limit),
+            currentPage: page,
+            tasks: rows,
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
 // Get task by ID
 exports.getTaskByID = async (req, res) => {
     try {
@@ -106,6 +142,7 @@ exports.updateTaskByID = async (req, res) => {
     }
 };
 
+// Delete task by ID
 exports.deleteTaskByID = async (req, res) => {
     try {
         const { id } = req.params;
